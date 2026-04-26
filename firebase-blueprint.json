@@ -1,0 +1,93 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and settings",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "photoURL": { "type": "string" },
+        "theme": { "type": "string", "enum": ["pastel", "dark"] },
+        "notificationLevel": { "type": "string", "enum": ["subtle", "notorious"] }
+      },
+      "required": ["email"]
+    },
+    "Career": {
+      "title": "Career",
+      "description": "Academic career (e.g., Inglés, Medicina)",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["trimester", "semester"] },
+        "scheduleImageUrl": { "type": "string" }
+      },
+      "required": ["name", "type"]
+    },
+    "Subject": {
+      "title": "Subject",
+      "description": "Academic subject",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "period": { "type": "number", "description": "Trimester or Semester number" },
+        "grades": { 
+          "type": "array", 
+          "items": { "type": "number" },
+          "description": "Grades by corte"
+        },
+        "finalGrade": { "type": "number" },
+        "status": { "type": "string", "enum": ["aprobada", "en curso", "por ver"] },
+        "modality": { "type": "string", "enum": ["virtual", "presencial"] }
+      },
+      "required": ["name", "period", "status", "modality"]
+    },
+    "Activity": {
+      "title": "Activity",
+      "description": "Academic activity or exam",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "priority": { "type": "string", "enum": ["low", "medium", "high"] },
+        "isExam": { "type": "boolean" },
+        "subjectId": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["title", "dueDate", "priority", "subjectId", "userId"]
+    },
+    "Quote": {
+      "title": "Quote",
+      "description": "Custom motivational quote",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["text", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User settings"
+    },
+    "/users/{userId}/quotes/{quoteId}": {
+      "schema": "Quote",
+      "description": "Custom quotes"
+    },
+    "/users/{userId}/careers/{careerId}": {
+      "schema": "Career",
+      "description": "User careers"
+    },
+    "/users/{userId}/careers/{careerId}/subjects/{subjectId}": {
+      "schema": "Subject",
+      "description": "Subjects for a career"
+    },
+    "/users/{userId}/careers/{careerId}/activities/{activityId}": {
+      "schema": "Activity",
+      "description": "Activities for a career"
+    }
+  }
+}

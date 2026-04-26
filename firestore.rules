@@ -1,0 +1,163 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Document ID: {userId}
+// Fields:
+//   - displayName: string (optional)
+//   - email: string (required, email format)
+//   - photoURL: string (optional)
+//   - theme: string (optional, enum: ['pastel', 'dark'])
+//   - notificationLevel: string (optional, enum: ['subtle', 'notorious'])
+//
+// Collection: users/{userId}/careers
+// Document ID: {careerId}
+// Fields:
+//   - name: string (required)
+//   - type: string (required, enum: ['trimester', 'semester'])
+//   - scheduleImageUrl: string (optional)
+//
+// Collection: users/{userId}/careers/{careerId}/subjects
+// Document ID: {subjectId}
+// Fields:
+//   - name: string (required)
+//   - period: number (required)
+//   - grades: list (optional, list of numbers)
+//   - finalGrade: number (optional)
+//   - status: string (required, enum: ['aprobada', 'por cursar'])
+//   - modality: string (required, enum: ['virtual', 'presencial'])
+//
+// Collection: users/{userId}/careers/{careerId}/activities
+// Document ID: {activityId}
+// Fields:
+//   - title: string (required)
+//   - description: string (optional)
+//   - dueDate: string (required, ISO 8601)
+//   - priority: string (required, enum: ['low', 'medium', 'high'])
+//   - isExam: bool (optional)
+//   - subjectId: string (required)
+//
+// ===============================================================
+
+// Collection: users/{userId}/quotes
+// Document ID: {quoteId}
+// Fields:
+//   - text: string (required)
+//   - createdAt: string (required, ISO 8601)
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "ligiavalentinavelasquez@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['email']) &&
+             isValidEmail(data.email) &&
+             (!('theme' in data) || data.theme in ['pastel', 'dark']) &&
+             (!('notificationLevel' in data) || data.notificationLevel in ['subtle', 'notorious']);
+    }
+
+    function isValidCareer(data) {
+      return data.keys().hasAll(['name', 'type']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.type in ['trimester', 'semester'];
+    }
+
+    function isValidSubject(data) {
+      return data.keys().hasAll(['name', 'period', 'status', 'modality']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.period is number &&
+             data.status in ['aprobada', 'en curso', 'por ver'] &&
+             data.modality in ['virtual', 'presencial'];
+    }
+
+    function isValidActivity(data) {
+      return data.keys().hasAll(['title', 'dueDate', 'priority', 'subjectId', 'userId']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             isValidDateString(data.dueDate) &&
+             data.priority in ['low', 'medium', 'high'] &&
+             data.subjectId is string &&
+             data.userId == request.auth.uid;
+    }
+
+    function isValidQuote(data) {
+      return data.keys().hasAll(['text', 'createdAt']) &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 500 &&
+             isValidDateString(data.createdAt);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data);
+
+      match /quotes/{quoteId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) && isValidQuote(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /careers/{careerId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) && isValidCareer(request.resource.data);
+        allow update: if isOwner(userId) && isValidCareer(request.resource.data);
+        allow delete: if isOwner(userId);
+
+        match /subjects/{subjectId} {
+          allow read: if isOwner(userId) || isAdmin();
+          allow create: if isOwner(userId) && isValidSubject(request.resource.data);
+          allow update: if isOwner(userId) && isValidSubject(request.resource.data);
+          allow delete: if isOwner(userId);
+        }
+
+        match /activities/{activityId} {
+          allow read: if isOwner(userId) || isAdmin();
+          allow create: if isOwner(userId) && isValidActivity(request.resource.data);
+          allow update: if isOwner(userId) && isValidActivity(request.resource.data);
+          allow delete: if isOwner(userId);
+        }
+      }
+    }
+
+    // Allow collection group queries for activities
+    match /{path=**}/activities/{activityId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+  }
+}
