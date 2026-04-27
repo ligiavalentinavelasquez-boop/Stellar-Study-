@@ -44,7 +44,7 @@ export function MasterCalendar({ userId }: MasterCalendarProps) {
     const unsubQuotes = onSnapshot(collection(db, path), (snap) => {
       setCustomQuotes(snap.docs.map(doc => doc.data().text));
     }, (error) => {
-      handleFirestoreError(error, OperationType.GET, path);
+      handleFirestoreError(error, OperationType.LIST, path);
     });
     return () => unsubQuotes();
   }, [userId]);
@@ -86,9 +86,8 @@ export function MasterCalendar({ userId }: MasterCalendarProps) {
 
   const getGreeting = () => {
     const hour = now.getHours();
-    if (hour < 12) return 'Buenos días';
-    if (hour < 18) return 'Buenas tardes';
-    return 'Buenas noches';
+    const greeting = hour < 12 ? 'Buenos días' : hour < 18 ? 'Buenas tardes' : 'Buenas noches';
+    return `${greeting}, ${userName}`;
   };
 
   const getDailyQuote = () => {
@@ -131,7 +130,7 @@ export function MasterCalendar({ userId }: MasterCalendarProps) {
     <div className="flex flex-col gap-6 pb-24 px-6 pt-8">
       <header className="flex justify-between items-start">
         <div className="flex flex-col gap-2">
-          <h2 className="text-secondary font-bold text-xs uppercase tracking-[0.2em]">{getGreeting()}, {userName}</h2>
+          <h2 className="text-secondary font-bold text-[10px] uppercase tracking-[0.2em]">{getGreeting()}</h2>
           <div className="border-l-2 border-[#bb86fc]/30 pl-3 mt-1 flex flex-col gap-1">
             <p className="text-muted-foreground text-[11px] italic leading-relaxed opacity-70 text-left max-w-[280px]">
               "{getDailyQuote()}"

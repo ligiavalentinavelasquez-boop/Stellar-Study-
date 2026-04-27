@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 
 // We try to import the config. If it's missing, we use a placeholder to avoid build errors.
 // The user will need to set up Firebase for this to work.

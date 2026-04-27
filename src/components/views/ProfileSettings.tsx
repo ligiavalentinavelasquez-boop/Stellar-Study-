@@ -1,5 +1,6 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -28,6 +29,12 @@ export function ProfileSettings({ user }: ProfileSettingsProps) {
   const [isSyncing, setIsSyncing] = React.useState(false);
   const [editingQuote, setEditingQuote] = React.useState<{id: string, text: string} | null>(null);
   const [isQuotesExpanded, setIsQuotesExpanded] = React.useState(false);
+  const [tempName, setTempName] = React.useState(user.displayName || '');
+  const [isEditingName, setIsEditingName] = React.useState(false);
+
+  React.useEffect(() => {
+    setTempName(user.displayName || '');
+  }, [user.displayName]);
 
   React.useEffect(() => {
     if (!user.uid) return;
@@ -35,18 +42,37 @@ export function ProfileSettings({ user }: ProfileSettingsProps) {
     const unsub = onSnapshot(collection(db, path), (snap) => {
       setQuotes(snap.docs.map(doc => ({ id: doc.id, text: doc.data().text })));
     }, (error) => {
-      handleFirestoreError(error, OperationType.GET, path);
+      handleFirestoreError(error, OperationType.LIST, path);
     });
     return () => unsub();
   }, [user.uid]);
 
+  const handleUpdateName = async () => {
+    if (!tempName.trim()) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        displayName: tempName.trim()
+      });
+      setIsEditingName(false);
+      toast.success('Nombre actualizado');
+    } catch (error) {
+      toast.error('Error al actualizar nombre');
+    }
+  };
+
   const handleAddQuote = async () => {
     if (!newQuote.trim()) return;
-    await addDoc(collection(db, `users/${user.uid}/quotes`), {
-      text: newQuote.trim(),
-      createdAt: new Date().toISOString()
-    });
-    setNewQuote('');
+    try {
+      await addDoc(collection(db, `users/${user.uid}/quotes`), {
+        text: newQuote.trim(),
+        createdAt: new Date().toISOString()
+      });
+      setNewQuote('');
+      toast.success('Frase agregada');
+    } catch (error) {
+      console.error(error);
+      toast.error('Error al agregar frase');
+    }
   };
 
   const handleUpdateQuote = async () => {
@@ -102,204 +128,242 @@ export function ProfileSettings({ user }: ProfileSettingsProps) {
 
   return (
     <div className="flex flex-col gap-8 pb-24 px-6 pt-8 max-w-sm mx-auto">
-      <header className="flex flex-col items-center gap-4 py-4">
+      <header className="flex flex-col items-center gap-4 py-8">
         <div className="relative">
-          <Avatar className="w-24 h-24 border-4 border-[#27272a] shadow-2xl">
+          <Avatar className="w-28 h-28 border-4 border-[#1f1f27] shadow-2xl">
             <AvatarImage src={user.photoURL} />
-            <AvatarFallback className="text-2xl bg-[#1f1f27] text-[#bb86fc] font-black">
-              {user.displayName?.charAt(0) || user.email.charAt(0)}
+            <AvatarFallback className="text-3xl bg-[#16161d] text-[#bb86fc] font-black">
+              {user.displayName?.charAt(0) || '?'}
             </AvatarFallback>
           </Avatar>
-          <div className="absolute bottom-1 right-1 w-5 h-5 bg-[#03dac6] border-4 border-[#0a0a0c] rounded-full shadow-[0_0_10px_rgba(3,218,198,0.5)]" />
+          <div className="absolute bottom-2 right-2 w-6 h-6 bg-[#03dac6] border-4 border-[#0a0a0c] rounded-full shadow-[0_0_15px_rgba(3,218,198,0.4)]" />
         </div>
-        <div className="text-center">
-          <h1 className="text-2xl font-black tracking-tight text-[#e4e4e7]">{user.displayName || 'Estudiante'}</h1>
-          <p className="text-[#a1a1aa] text-[10px] font-bold uppercase tracking-widest mt-1">{user.email}</p>
+        
+        <div className="text-center space-y-1">
+          <h1 className="text-2xl font-black tracking-tight text-[#e4e4e7] uppercase">
+            {user.displayName || 'Estudiante'}
+          </h1>
+          <p className="text-[#a1a1aa] text-[9px] font-bold uppercase tracking-[0.3em] opacity-40">Configuración de Perfil</p>
         </div>
       </header>
 
-      <div className="flex flex-col gap-6">
-        <div className="text-center mb-2">
-          <h2 className="text-xl font-black tracking-tighter text-[#bb86fc] uppercase">Ajustes</h2>
-        </div>
-
-        {/* FRASES SECTION - COLLAPSIBLE */}
-        <section className="flex flex-col items-center w-full">
-          <Button 
-            variant="ghost" 
-            className="w-full flex justify-between items-center py-6 px-4 hover:bg-[#16161d] group transition-all"
-            onClick={() => setIsQuotesExpanded(!isQuotesExpanded)}
-          >
-            <div className="flex items-center gap-3">
-              <MessageSquareQuote size={20} className="text-[#bb86fc]" />
-              <span className="text-[11px] font-black tracking-[0.1em] text-[#e4e4e7] uppercase">Frases</span>
-            </div>
-            <div className={cn("transition-transform duration-300", isQuotesExpanded ? "rotate-180" : "")}>
-              <Plus size={18} className="text-muted-foreground" />
-            </div>
-          </Button>
-
-          {isQuotesExpanded && (
-            <Card className="border border-[#27272a] bg-[#16161d] shadow-xl rounded-2xl w-full mt-2 animate-in fade-in slide-in-from-top-4 duration-300">
-              <CardContent className="p-4 flex flex-col gap-6">
-                <div className="flex flex-col gap-3 items-center">
-                  <Input 
-                    placeholder="Escribe una frase inspiradora..." 
-                    value={newQuote}
-                    onChange={(e) => setNewQuote(e.target.value)}
-                    className="bg-[#1f1f27] border-none text-xs rounded-xl h-12 text-center"
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddQuote()}
-                  />
-                  <Button onClick={handleAddQuote} className="h-10 px-6 rounded-xl bg-[#bb86fc] text-[#0a0a0c] shadow-lg shadow-[#bb86fc]/20 font-black text-[10px] uppercase tracking-widest">
-                    <Plus size={16} className="mr-2" />
-                    Agregar Frase
-                  </Button>
-                </div>
-                
-                <div className="flex flex-col gap-3 max-h-[300px] overflow-y-auto pr-1">
-                  {quotes.map((q) => (
-                    <div key={q.id} className="flex flex-col items-center gap-3 p-5 rounded-2xl bg-[#1f1f27] group border border-white/5 text-center">
-                      {editingQuote?.id === q.id ? (
-                        <div className="flex flex-col gap-2 w-full">
-                          <Input 
-                            value={editingQuote.text}
-                            onChange={(e) => setEditingQuote({ ...editingQuote, text: e.target.value })}
-                            className="bg-[#0a0a0c] border-[#bb86fc]/30 text-xs text-center h-10"
-                            autoFocus
-                          />
-                          <div className="flex justify-center gap-2">
-                            <Button size="sm" onClick={handleUpdateQuote} className="h-8 bg-[#03dac6] text-[#0a0a0c] font-black uppercase text-[9px] px-4">
-                              <Check size={14} className="mr-1" /> Guardar
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={() => setEditingQuote(null)} className="h-8 text-[#a1a1aa] font-black uppercase text-[9px] px-4">
-                              <X size={14} className="mr-1" /> Cancelar
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <p className="text-xs text-[#e4e4e7] font-medium leading-relaxed italic">"{q.text}"</p>
-                          <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => setEditingQuote(q)}
-                              className="h-7 px-3 text-[#bb86fc] hover:text-[#bb86fc] hover:bg-[#bb86fc]/10 text-[9px] font-black uppercase tracking-widest"
-                            >
-                              <Pencil size={14} className="mr-1" />
-                              Editar
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => handleDeleteQuote(q.id)}
-                              className="h-7 px-3 text-destructive hover:text-destructive hover:bg-destructive/10 text-[9px] font-black uppercase tracking-widest"
-                            >
-                              <Trash2 size={14} className="mr-1" />
-                              Eliminar
-                            </Button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                  {quotes.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-8 text-center gap-3">
-                      <Quote size={32} className="text-muted-foreground opacity-20" />
-                      <p className="text-[10px] text-muted-foreground italic uppercase tracking-widest">No has agregado frases personalizadas.</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </section>
-
-        {/* CUENTA Y SEGURIDAD SECTION - CENTERED */}
-        <section className="flex flex-col items-center w-full">
-          <div className="w-full flex items-center gap-3 py-4 px-4">
-            <Shield size={20} className="text-[#03dac6]" />
-            <span className="text-[11px] font-black tracking-[0.1em] text-[#e4e4e7] uppercase">CUENTA Y SEGURIDAD</span>
+      <div className="flex flex-col gap-10">
+        {/* PERSONALIZACIÓN DE NOMBRE - TOP CARD */}
+        <section className="flex flex-col gap-4">
+          <div className="flex items-center gap-3 px-1">
+            <UserIcon size={18} className="text-[#bb86fc]" />
+            <span className="text-[10px] font-black tracking-[0.2em] text-[#e4e4e7] uppercase">Identidad</span>
           </div>
-          <Card className="border border-[#27272a] bg-[#16161d] shadow-xl rounded-2xl overflow-hidden w-full">
-            <CardContent className="p-0 flex flex-col">
-              <Button 
-                variant="ghost" 
-                className="justify-center gap-3 h-14 rounded-none text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#1f1f27] border-b border-[#27272a]/50 w-full"
-                onClick={handleSyncExcel}
-                disabled={isSyncing}
-              >
-                <RefreshCw size={18} className={cn("text-[#bb86fc]", isSyncing && "animate-spin")} />
-                <span className="text-[10px] font-black uppercase tracking-widest">
-                  {isSyncing ? 'Sincronizando...' : 'Sincronizar Inglés Maestro'}
-                </span>
-              </Button>
-              <Button 
-                variant="ghost" 
-                className="justify-center gap-3 h-14 rounded-none text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#1f1f27] border-b border-[#27272a]/50 w-full"
-                onClick={handleSyncMedicina}
-                disabled={isSyncing}
-              >
-                <RefreshCw size={18} className={cn("text-[#03dac6]", isSyncing && "animate-spin")} />
-                <span className="text-[10px] font-black uppercase tracking-widest">
-                  {isSyncing ? 'Sincronizando...' : 'Sincronizar Medicina Maestro'}
-                </span>
-              </Button>
-              <Button 
-                variant="ghost" 
-                className="justify-center gap-3 h-14 rounded-none text-[#ff5252] hover:text-[#ff5252] hover:bg-[#ff5252]/10 w-full"
-                onClick={handleLogout}
-              >
-                <LogOut size={18} />
-                <span className="text-[10px] font-black uppercase tracking-widest">Cerrar Sesión</span>
-              </Button>
+          <Card className="border border-white/5 bg-[#16161d] shadow-2xl rounded-3xl overflow-hidden">
+            <CardContent className="p-6">
+              <div className="flex flex-col gap-4">
+                <div className="space-y-2">
+                  <Label className="text-[9px] font-black text-[#a1a1aa] uppercase tracking-[0.2em] ml-1">Tu Nombre de Usuario</Label>
+                  <div className="flex gap-2">
+                    <Input 
+                      value={tempName}
+                      onChange={(e) => setTempName(e.target.value)}
+                      placeholder="Escribe tu nombre..."
+                      className="h-12 bg-[#0a0a0c] border-white/5 text-[14px] font-bold rounded-2xl focus:border-[#bb86fc]/50 transition-all"
+                    />
+                    <Button 
+                      onClick={handleUpdateName}
+                      disabled={!tempName.trim() || tempName === user.displayName}
+                      className="h-12 w-12 rounded-2xl bg-[#bb86fc] text-[#0a0a0c] font-black shadow-lg shadow-[#bb86fc]/20"
+                    >
+                      <Check size={20} />
+                    </Button>
+                  </div>
+                  <p className="text-[8px] text-[#a1a1aa] font-medium uppercase tracking-widest leading-relaxed ml-1 pt-1 opacity-50">
+                    Este nombre se usará en tus saludos diarios.
+                  </p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </section>
 
-        {/* PREFERENCIAS SECTION - AT THE BOTTOM */}
-        <section className="flex flex-col items-center w-full">
-          <div className="w-full flex items-center gap-3 py-4 px-4">
-            <Settings size={20} className="text-[#bb86fc]" />
-            <span className="text-[11px] font-black tracking-[0.1em] text-[#e4e4e7] uppercase">PREFERENCIAS</span>
+        {/* FRASES SECTION - MODER ALMA DESIGN */}
+        <section className="flex flex-col gap-4">
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-3">
+              <MessageSquareQuote size={18} className="text-[#03dac6]" />
+              <span className="text-[10px] font-black tracking-[0.2em] text-[#e4e4e7] uppercase">Frases del Alma</span>
+            </div>
+            <Badge variant="outline" className="text-[8px] border-[#03dac6]/30 text-[#03dac6] font-bold uppercase tracking-widest rounded-full px-2 py-0">
+              {quotes.length} Guardadas
+            </Badge>
           </div>
-          <Card className="border border-[#27272a] bg-[#16161d] shadow-xl rounded-2xl w-full">
-            <CardContent className="p-4 flex flex-col gap-4">
-              {/* Notificaciones Compact */}
+          
+          <Card className="border border-white/5 bg-[#16161d] shadow-2xl rounded-3xl overflow-hidden">
+            <CardContent className="p-6 space-y-6">
+              <div className="space-y-3">
+                <div className="relative group">
+                  <Input 
+                    placeholder="Escribe una frase que te resuene..." 
+                    value={newQuote}
+                    onChange={(e) => setNewQuote(e.target.value)}
+                    className="bg-[#0a0a0c] border-white/5 text-[12px] italic rounded-2xl h-14 pl-12 pr-4 shadow-inner transition-all focus:ring-1 focus:ring-[#03dac6]/30"
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddQuote()}
+                  />
+                  <Quote className="absolute left-4 top-1/2 -translate-y-1/2 text-[#03dac6]/40" size={20} />
+                </div>
+                <Button 
+                  onClick={handleAddQuote} 
+                  disabled={!newQuote.trim()}
+                  className="h-12 w-full rounded-2xl bg-[#03dac6]/10 hover:bg-[#03dac6]/20 text-[#03dac6] border border-[#03dac6]/20 font-black text-[10px] uppercase tracking-[0.25em] transition-all"
+                >
+                  <Plus size={16} className="mr-2" />
+                  Agregar al Mazo
+                </Button>
+              </div>
+              
+              <div className="space-y-4 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar">
+                {quotes.map((q) => (
+                  <div key={q.id} className="relative p-5 rounded-2xl bg-[#1f1f27] group border border-white/5 hover:border-[#bb86fc]/20 transition-all duration-300">
+                    {editingQuote?.id === q.id ? (
+                      <div className="flex flex-col gap-3">
+                        <Input 
+                          value={editingQuote.text}
+                          onChange={(e) => setEditingQuote({ ...editingQuote, text: e.target.value })}
+                          className="bg-[#0a0a0c] border-[#bb86fc]/30 text-[12px] italic h-10 rounded-xl"
+                          autoFocus
+                        />
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" onClick={handleUpdateQuote} className="h-8 bg-[#bb86fc] text-[#0a0a0c] font-black uppercase text-[8px] px-4 rounded-lg">
+                            Guardar
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setEditingQuote(null)} className="h-8 text-[#a1a1aa] font-black uppercase text-[8px] rounded-lg">
+                            Cancelar
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex gap-4">
+                          <Quote size={16} className="text-[#bb86fc]/30 shrink-0 mt-1" />
+                          <p className="text-[12px] text-[#e4e4e7] font-medium italic pr-10 leading-relaxed">"{q.text}"</p>
+                        </div>
+                        <div className="absolute top-4 right-4 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
+                          <button onClick={() => setEditingQuote(q)} className="p-2 hover:bg-white/5 rounded-xl text-[#bb86fc] transition-colors">
+                            <Pencil size={14} />
+                          </button>
+                          <button onClick={() => handleDeleteQuote(q.id)} className="p-2 hover:bg-white/5 rounded-xl text-destructive/70 transition-colors">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+                {quotes.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-16 text-center gap-5 opacity-20">
+                    <div className="w-20 h-20 rounded-full border-4 border-dashed border-muted-foreground/30 flex items-center justify-center">
+                      <Quote size={32} className="text-muted-foreground" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-black uppercase tracking-[0.3em]">Mazo Vacío</p>
+                      <p className="text-[9px] font-bold uppercase tracking-widest italic">Personaliza tu inspiración matutina</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* CONFIGURACIÓN SECTION */}
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center gap-3 px-1">
+            <Settings size={18} className="text-[#bb86fc]" />
+            <span className="text-[10px] font-black tracking-[0.2em] text-[#e4e4e7] uppercase">Pantalla</span>
+          </div>
+          <Card className="border border-white/10 bg-[#16161d] shadow-xl rounded-3xl w-full">
+            <CardContent className="p-6 flex flex-col gap-5">
               <div className="flex items-center justify-between w-full">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-[#03dac6]/10 rounded-xl">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-[#bb86fc]/10 rounded-2xl flex items-center justify-center">
+                    {theme === 'dark' ? <Moon size={18} className="text-[#bb86fc]" /> : <Sun size={18} className="text-[#bb86fc]" />}
+                  </div>
+                  <Label className="text-[12px] font-bold text-[#e4e4e7] uppercase tracking-wider">Modo Claro</Label>
+                </div>
+                <Switch 
+                  checked={theme === 'light'} 
+                  onCheckedChange={(checked) => setTheme(checked ? 'light' : 'dark')} 
+                  className="data-[state=checked]:bg-[#bb86fc]"
+                />
+              </div>
+
+              <div className="flex items-center justify-between w-full pt-5 border-t border-white/5">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-[#03dac6]/10 rounded-2xl flex items-center justify-center">
                     <Bell size={18} className="text-[#03dac6]" />
                   </div>
                   <div className="flex flex-col">
-                    <Label className="text-[11px] font-bold text-[#e4e4e7]">Notificaciones</Label>
-                    <p className="text-[9px] text-[#a1a1aa] font-medium uppercase tracking-widest">{user.notificationLevel}</p>
+                    <Label className="text-[12px] font-bold text-[#e4e4e7] uppercase tracking-wider">Alertas</Label>
+                    <p className="text-[8px] text-[#a1a1aa] font-medium uppercase tracking-[0.15em]">Nivel: {user.notificationLevel === 'notorious' ? 'ALTO' : 'NORMAL'}</p>
                   </div>
                 </div>
                 <Switch 
                   checked={user.notificationLevel === 'notorious'} 
                   onCheckedChange={updateNotificationLevel} 
-                  className="scale-75"
-                />
-              </div>
-
-              {/* Tema Compact */}
-              <div className="flex items-center justify-between w-full pt-4 border-t border-[#27272a]/50">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-[#bb86fc]/10 rounded-xl">
-                    {theme === 'dark' ? <Moon size={18} className="text-[#bb86fc]" /> : <Sun size={18} className="text-[#bb86fc]" />}
-                  </div>
-                  <Label className="text-[11px] font-bold text-[#e4e4e7]">Modo Claro</Label>
-                </div>
-                <Switch 
-                  checked={theme === 'light'} 
-                  onCheckedChange={(checked) => setTheme(checked ? 'light' : 'dark')} 
-                  className="scale-75"
+                  className="data-[state=checked]:bg-[#03dac6]"
                 />
               </div>
             </CardContent>
           </Card>
         </section>
+
+        {/* SINCRONIZACIÓN SECTION */}
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center gap-3 px-1">
+            <RefreshCw size={18} className="text-[#03dac6]" />
+            <span className="text-[10px] font-black tracking-[0.2em] text-[#e4e4e7] uppercase">Carga Maestra</span>
+          </div>
+          <Card className="border border-white/10 bg-[#16161d] shadow-xl rounded-3xl w-full overflow-hidden">
+            <CardContent className="p-0 flex flex-col">
+              <Button 
+                variant="ghost" 
+                className="justify-start gap-4 h-16 rounded-none px-6 text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-white/5 border-b border-white/5 w-full group"
+                onClick={handleSyncExcel}
+                disabled={isSyncing}
+              >
+                <div className="w-9 h-9 rounded-xl bg-[#bb86fc]/10 flex items-center justify-center group-hover:bg-[#bb86fc]/20 transition-all">
+                  <RefreshCw size={16} className={cn("text-[#bb86fc]", isSyncing && "animate-spin")} />
+                </div>
+                <div className="flex flex-col items-start translate-y-[2px]">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-[#e4e4e7]">Inglés IUTSO</span>
+                  <span className="text-[8px] font-bold uppercase tracking-widest opacity-50 mt-1">Excel Maestro</span>
+                </div>
+              </Button>
+              <Button 
+                variant="ghost" 
+                className="justify-start gap-4 h-16 rounded-none px-6 text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-white/5 w-full group"
+                onClick={handleSyncMedicina}
+                disabled={isSyncing}
+              >
+                <div className="w-9 h-9 rounded-xl bg-[#03dac6]/10 flex items-center justify-center group-hover:bg-[#03dac6]/20 transition-all">
+                  <RefreshCw size={16} className={cn("text-[#03dac6]", isSyncing && "animate-spin")} />
+                </div>
+                <div className="flex flex-col items-start translate-y-[2px]">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-[#e4e4e7]">Medicina</span>
+                  <span className="text-[8px] font-bold uppercase tracking-widest opacity-50 mt-1">Doc. Maestro</span>
+                </div>
+              </Button>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* LOGOUT */}
+        <div className="pt-8 pb-12 flex justify-center">
+          <button 
+            onClick={handleLogout}
+            className="flex items-center gap-3 py-3 px-6 rounded-2xl text-destructive/50 hover:text-destructive hover:bg-destructive/5 transition-all group"
+          >
+            <LogOut size={16} className="opacity-50 group-hover:opacity-100" />
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] mt-[2px]">Finalizar Sesión</span>
+          </button>
+        </div>
       </div>
     </div>
   );

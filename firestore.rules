@@ -60,8 +60,20 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isGuest(userId) {
+      return userId is string && userId.matches('^guest_.*');
+    }
+
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return request.auth != null && (request.auth.token.email == "ligiavalentinavelasquez@gmail.com" && request.auth.token.email_verified == true);
+    }
+
+    function canAccess(userId) {
+      return isGuest(userId) || isOwner(userId) || isAdmin();
     }
 
     function isValidEmail(email) {
@@ -70,12 +82,6 @@ service cloud.firestore {
 
     function isValidDateString(dateStr) {
       return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
-    }
-
-    function isAdmin() {
-      return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (request.auth.token.email == "ligiavalentinavelasquez@gmail.com" && request.auth.token.email_verified == true));
     }
 
     // ===============================================================
@@ -103,18 +109,18 @@ service cloud.firestore {
              data.modality in ['virtual', 'presencial'];
     }
 
-    function isValidActivity(data) {
+    function isValidActivity(data, ownerId) {
       return data.keys().hasAll(['title', 'dueDate', 'priority', 'subjectId', 'userId']) &&
              data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
              isValidDateString(data.dueDate) &&
              data.priority in ['low', 'medium', 'high'] &&
              data.subjectId is string &&
-             data.userId == request.auth.uid;
+             data.userId == ownerId;
     }
 
     function isValidQuote(data) {
       return data.keys().hasAll(['text', 'createdAt']) &&
-             data.text is string && data.text.size() > 0 && data.text.size() < 500 &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 1000 &&
              isValidDateString(data.createdAt);
     }
 
@@ -123,41 +129,15 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && isValidUser(request.resource.data);
-      allow update: if isOwner(userId) && isValidUser(request.resource.data);
+      allow read, write: if canAccess(userId);
 
-      match /quotes/{quoteId} {
-        allow read: if isOwner(userId) || isAdmin();
-        allow create: if isOwner(userId) && isValidQuote(request.resource.data);
-        allow delete: if isOwner(userId);
-      }
-
-      match /careers/{careerId} {
-        allow read: if isOwner(userId) || isAdmin();
-        allow create: if isOwner(userId) && isValidCareer(request.resource.data);
-        allow update: if isOwner(userId) && isValidCareer(request.resource.data);
-        allow delete: if isOwner(userId);
-
-        match /subjects/{subjectId} {
-          allow read: if isOwner(userId) || isAdmin();
-          allow create: if isOwner(userId) && isValidSubject(request.resource.data);
-          allow update: if isOwner(userId) && isValidSubject(request.resource.data);
-          allow delete: if isOwner(userId);
-        }
-
-        match /activities/{activityId} {
-          allow read: if isOwner(userId) || isAdmin();
-          allow create: if isOwner(userId) && isValidActivity(request.resource.data);
-          allow update: if isOwner(userId) && isValidActivity(request.resource.data);
-          allow delete: if isOwner(userId);
-        }
+      match /{allPaths=**} {
+        allow read, write: if canAccess(userId);
       }
     }
 
-    // Allow collection group queries for activities
     match /{path=**}/activities/{activityId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read: if canAccess(resource.data.userId);
     }
   }
 }
