@@ -13,6 +13,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { AnimatePresence, motion } from 'motion/react';
 import { handleFirestoreError, OperationType } from '@/src/lib/firestoreErrorHandler';
+import { StudyAssistant } from '@/src/components/AI/StudyAssistant';
 
 function AppContent() {
   const [hasStarted, setHasStarted] = useState(() => {
@@ -172,6 +173,7 @@ function AppContent() {
       </AnimatePresence>
       
       <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
+      <StudyAssistant />
       <Toaster position="top-center" />
     </div>
   );
